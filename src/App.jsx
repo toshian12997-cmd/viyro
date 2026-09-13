@@ -1,101 +1,133 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-const LOADER_MS = 12000;
+const LOADER_MS = 8500;
+const STORAGE = { auth: 'viyro_auth', db: 'viyro_db', theme: 'viyro_theme' };
+const emptyDb = { businesses: [], transactions: [], customers: [], products: [], invoices: [], notifications: [] };
 
-function VMark() {
-  return (
-    <div className="v-mark" aria-label="Vero">
-      <span className="v-left" />
-      <span className="v-right" />
-      <span className="v-dot" />
-    </div>
-  );
+function loadDb() {
+  try { return { ...emptyDb, ...(JSON.parse(localStorage.getItem(STORAGE.db)) || {}) }; } catch { return emptyDb; }
 }
+function money(value) { return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', maximumFractionDigits: 0 }).format(Number(value) || 0); }
+function uid(prefix = 'id') { return `${prefix}_${crypto.randomUUID?.() || Date.now() + Math.random()}`; }
 
+function VMark({ small = false }) {
+  return <div className={`v-mark ${small ? 'small' : ''}`} aria-label="Vero"><span className="v-left"/><span className="v-right"/><span className="v-dot"/></div>;
+}
 function Briefcase() {
-  return (
-    <div className="briefcase-wrap" aria-hidden="true">
-      <div className="briefcase-handle" />
-      <div className="briefcase">
-        <div className="briefcase-lock" />
-        <div className="briefcase-line" />
-      </div>
-    </div>
-  );
+  return <div className="briefcase-wrap" aria-hidden="true"><div className="briefcase-handle"/><div className="briefcase"><div className="briefcase-lock"/><div className="briefcase-line"/></div></div>;
 }
-
 function Businessman() {
-  return (
-    <div className="businessman" aria-hidden="true">
-      <div className="head" />
-      <div className="neck" />
-      <div className="body">
-        <div className="shirt" />
-        <div className="tie" />
-        <div className="jacket-logo">V</div>
-      </div>
-      <div className="arm arm-left" />
-      <div className="arm arm-right" />
-      <div className="leg leg-left" />
-      <div className="leg leg-right" />
-      <Briefcase />
-    </div>
-  );
+  return <div className="businessman" aria-hidden="true"><div className="head"/><div className="neck"/><div className="body"><div className="shirt"/><div className="tie"/><div className="jacket-logo">V</div></div><div className="arm arm-left"/><div className="arm arm-right"/><div className="leg leg-left"/><div className="leg leg-right"/><Briefcase/></div>;
+}
+function Loader({ onDone }) {
+  useEffect(() => { const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches; const timer = setTimeout(onDone, reduced ? 500 : LOADER_MS); return () => clearTimeout(timer); }, [onDone]);
+  return <section className="loader"><div className="ambient ambient-one"/><div className="ambient ambient-two"/><div className="loader-content"><div className="logo-stage"><div className="v-glow"/><VMark/><Businessman/></div><div className="loader-copy"><div className="wordmark">Vero</div><p>Business, made clearer.</p></div><div className="progress-track"><span/></div></div></section>;
 }
 
-function LoginPreview() {
-  return (
-    <section className="login-preview" aria-label="Vero sign in">
-      <div className="login-card glass">
-        <div className="mini-brand"><VMark /><span>Vero</span></div>
-        <h1>Welcome back</h1>
-        <p>Sign in to continue to your business workspace.</p>
-        <div className="fake-input">Email or phone</div>
-        <div className="fake-input">Password <span>••••••••</span></div>
-        <button type="button">Continue</button>
-        <div className="login-foot">Secure access · Private workspace</div>
-      </div>
-    </section>
-  );
+function Auth({ onLogin }) {
+  const [mode, setMode] = useState('login');
+  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const change = e => setForm({ ...form, [e.target.name]: e.target.value });
+
+  const submit = e => {
+    e.preventDefault(); setError(''); setMessage('');
+    if (mode === 'signup' && !form.name.trim()) return setError('Enter your name.');
+    if (!form.email.trim() || !form.email.includes('@')) return setError('Enter a valid email address.');
+    if (form.password.length < 8) return setError('Password must contain at least 8 characters.');
+    const auth = JSON.parse(localStorage.getItem(STORAGE.auth) || 'null');
+    if (mode === 'signup') {
+      const next = { name: form.name.trim(), email: form.email.trim().toLowerCase(), phone: form.phone.trim(), password: form.password };
+      localStorage.setItem(STORAGE.auth, JSON.stringify(next));
+      setMessage('Account created. Your workspace starts empty and is ready for your first record.');
+      setMode('login'); setForm({ ...form, password: '' });
+    } else {
+      if (!auth || auth.email !== form.email.trim().toLowerCase() || auth.password !== form.password) return setError('Those sign-in details do not match this device account.');
+      onLogin({ name: auth.name, email: auth.email, phone: auth.phone });
+    }
+  };
+
+  const demoGoogle = () => { setError('Google sign-in needs a configured OAuth client. No demo account is created.'); };
+  return <section className="auth-page"><div className="auth-image"><div className="image-overlay"/><div className="auth-story"><span>VERO</span><h2>See your business<br/>with clarity.</h2><p>Track what matters. Understand what changed. Make the next decision with better information.</p></div></div><div className="auth-panel"><div className="auth-inner"><div className="brand-row"><VMark small/><strong>Vero</strong></div><div className="auth-heading"><span className="eyebrow">PRIVATE BUSINESS WORKSPACE</span><h1>{mode === 'login' ? 'Welcome back.' : 'Create your workspace.'}</h1><p>{mode === 'login' ? 'Sign in to continue where you left off.' : 'Start with your own secure business workspace.'}</p></div><form onSubmit={submit} className="auth-form">{mode === 'signup' && <label>Name<input name="name" value={form.name} onChange={change} placeholder="Your name" autoComplete="name"/></label>}<label>Email<input name="email" value={form.email} onChange={change} placeholder="you@example.com" autoComplete="email"/></label>{mode === 'signup' && <label>Phone <span className="muted">optional</span><input name="phone" value={form.phone} onChange={change} placeholder="07xx xxx xxx" autoComplete="tel"/></label>}<label>Password<div className="password-wrap"><input type={showPassword ? 'text' : 'password'} name="password" value={form.password} onChange={change} placeholder="Minimum 8 characters" autoComplete={mode === 'login' ? 'current-password' : 'new-password'}/><button type="button" onClick={() => setShowPassword(!showPassword)}>{showPassword ? 'Hide' : 'Show'}</button></div></label>{mode === 'login' && <div className="form-row"><label className="check"><input type="checkbox"/> Remember me</label><button type="button" className="link-btn" onClick={() => setMessage('Password recovery is ready for a backend email provider; configure it before production use.')}>Forgot password?</button></div>}{error && <div className="alert error">{error}</div>}{message && <div className="alert success">{message}</div>}<button className="primary-btn" type="submit">{mode === 'login' ? 'Sign in to Vero' : 'Create account'}</button></form><div className="divider"><span>or</span></div><button className="google-btn" type="button" onClick={demoGoogle}><span>G</span> Continue with Google</button><p className="switch">{mode === 'login' ? 'New to Vero?' : 'Already have an account?'} <button type="button" className="link-btn" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setMessage(''); }}>{mode === 'login' ? 'Create account' : 'Sign in'}</button></p><small className="legal">By continuing, you agree to Vero's Terms and Privacy Policy.</small></div></div></section>;
 }
 
-export default function App() {
-  const [loaded, setLoaded] = useState(false);
-  const [reducedMotion, setReducedMotion] = useState(false);
+const nav = [
+  ['overview','Overview','⌂'], ['transactions','Transactions','↕'], ['customers','Customers','◌'], ['products','Products','▦'], ['invoices','Invoices','▤'], ['reports','Reports','◒'], ['notifications','Notifications','◉']
+];
 
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const update = () => setReducedMotion(media.matches);
-    update();
-    media.addEventListener?.('change', update);
+function Modal({ title, children, onClose }) { return <div className="modal-backdrop" onMouseDown={e => e.target === e.currentTarget && onClose()}><div className="modal glass"><div className="modal-head"><h2>{title}</h2><button className="icon-btn" onClick={onClose}>×</button></div>{children}</div></div>; }
+function Empty({ icon, title, text, action }) { return <div className="empty glass"><div className="empty-icon">{icon}</div><h3>{title}</h3><p>{text}</p>{action}</div>; }
 
-    const timer = window.setTimeout(() => setLoaded(true), reducedMotion ? 500 : LOADER_MS);
-    return () => {
-      window.clearTimeout(timer);
-      media.removeEventListener?.('change', update);
-    };
-  }, [reducedMotion]);
+function Dashboard({ db, setDb, page, setPage, user }) {
+  const [modal, setModal] = useState(null);
+  const [query, setQuery] = useState('');
+  const [toast, setToast] = useState('');
+  const [menu, setMenu] = useState(false);
+  const [theme, setTheme] = useState(localStorage.getItem(STORAGE.theme) || 'dark');
+  useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem(STORAGE.theme, theme); }, [theme]);
+  const update = patch => setDb(prev => ({ ...prev, ...patch }));
+  const transactions = db.transactions;
+  const income = transactions.filter(x => x.type === 'income').reduce((s,x) => s + Number(x.amount), 0);
+  const expenses = transactions.filter(x => x.type === 'expense').reduce((s,x) => s + Number(x.amount), 0);
+  const profit = income - expenses;
+  const recent = [...transactions].sort((a,b) => b.createdAt - a.createdAt).slice(0,6);
+  const notify = msg => { setToast(msg); setTimeout(() => setToast(''), 2800); };
+  const addTransaction = data => { update({ transactions: [...db.transactions, { ...data, id: uid('txn'), createdAt: Date.now(), amount: Number(data.amount) }] }); setModal(null); notify('Transaction recorded.'); };
+  const addCustomer = data => { update({ customers: [...db.customers, { ...data, id: uid('cus'), createdAt: Date.now() }] }); setModal(null); notify('Customer added.'); };
+  const addProduct = data => { update({ products: [...db.products, { ...data, id: uid('prd'), price: Number(data.price), createdAt: Date.now() }] }); setModal(null); notify('Product added.'); };
+  const addInvoice = data => { update({ invoices: [...db.invoices, { ...data, id: uid('inv'), createdAt: Date.now(), amount: Number(data.amount), status: 'Draft' }] }); setModal(null); notify('Invoice saved as draft.'); };
+  const deleteItem = (collection, id) => { update({ [collection]: db[collection].filter(x => x.id !== id) }); notify('Record removed.'); };
 
-  return (
-    <main className={`app ${loaded ? 'is-loaded' : ''}`}>
-      <section className="loader" aria-hidden={loaded}>
-        <div className="ambient ambient-one" />
-        <div className="ambient ambient-two" />
-        <div className="loader-content">
-          <div className="logo-stage">
-            <div className="v-glow" />
-            <VMark />
-            <Businessman />
-          </div>
-          <div className="loader-copy">
-            <div className="wordmark">Vero</div>
-            <p>Business, made clearer.</p>
-          </div>
-          <div className="progress-track"><span /></div>
-        </div>
-      </section>
+  const pageTitle = { overview:'Overview', transactions:'Transactions', customers:'Customers', products:'Products', invoices:'Invoices', reports:'Reports', notifications:'Notifications', settings:'Settings' }[page] || 'Overview';
+  const globalResults = useMemo(() => {
+    if (!query.trim()) return [];
+    const q = query.toLowerCase();
+    return [...db.customers.map(x => ({ type:'Customer', label:x.name, id:x.id })), ...db.products.map(x => ({ type:'Product', label:x.name, id:x.id })), ...db.transactions.map(x => ({ type:'Transaction', label:x.description, id:x.id }))].filter(x => x.label?.toLowerCase().includes(q)).slice(0,8);
+  }, [query, db]);
 
-      <LoginPreview />
+  return <div className="shell">
+    <aside className="sidebar glass"><div className="side-brand"><VMark small/><span>Vero</span></div><div className="workspace"><div className="workspace-avatar">{(user.name || 'V').charAt(0).toUpperCase()}</div><div><strong>{user.name || 'My workspace'}</strong><small>{user.email}</small></div><span>⌄</span></div><nav>{nav.map(([id,label,icon]) => <button key={id} className={page===id ? 'active' : ''} onClick={() => setPage(id)}><span>{icon}</span>{label}{id==='notifications' && db.notifications.length > 0 ? <b>{db.notifications.length}</b> : null}</button>)}</nav><div className="side-bottom"><button className={page==='settings' ? 'active' : ''} onClick={() => setPage('settings')}>⚙ <span>Settings</span></button><div className="security-pill"><i/> <span>Local workspace protected</span></div></div></aside>
+    <main className="main"><header className="topbar"><div className="mobile-brand"><VMark small/>Vero</div><div className="search-wrap"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search your workspace..."/>{query && <div className="search-results">{globalResults.length ? globalResults.map(x=><button key={x.id} onClick={()=>{setQuery(''); setPage(x.type==='Customer'?'customers':x.type==='Product'?'products':'transactions')}}><span>{x.type}</span>{x.label}</button>) : <p>No matching records.</p>}</div>}</div><div className="top-actions"><button className="icon-btn" onClick={() => setTheme(theme==='dark'?'light':'dark')} title="Toggle theme">{theme==='dark'?'☼':'☾'}</button><button className="icon-btn notification-btn" onClick={()=>setPage('notifications')}>◉{db.notifications.length>0&&<i/>}</button><div className="profile"><button className="avatar" onClick={()=>setMenu(!menu)}>{(user.name||'V').charAt(0).toUpperCase()}</button>{menu&&<div className="profile-menu"><strong>{user.name}</strong><small>{user.email}</small><button onClick={()=>{localStorage.removeItem(STORAGE.auth); location.reload();}}>Sign out</button></div>}</div></div></header>
+      <div className="content"><div className="page-head"><div><span className="eyebrow">{page==='overview'?'BUSINESS CONTROL CENTER':'VERO WORKSPACE'}</span><h1>{pageTitle}</h1><p>{page==='overview'?'A clear view of the numbers you actually record.':'Manage your records and keep your business information organized.'}</p></div><div className="head-actions">{page==='overview'&&<button className="primary-btn compact" onClick={()=>setModal('transaction')}>+ Record transaction</button>}{page==='transactions'&&<button className="primary-btn compact" onClick={()=>setModal('transaction')}>+ Add transaction</button>}{page==='customers'&&<button className="primary-btn compact" onClick={()=>setModal('customer')}>+ Add customer</button>}{page==='products'&&<button className="primary-btn compact" onClick={()=>setModal('product')}>+ Add product</button>}{page==='invoices'&&<button className="primary-btn compact" onClick={()=>setModal('invoice')}>+ Create invoice</button>}</div></div>
+      {page==='overview'&&<Overview income={income} expenses={expenses} profit={profit} transactions={transactions} recent={recent} setPage={setPage} setModal={setModal}/>} 
+      {page==='transactions'&&<Transactions items={transactions} onDelete={id=>deleteItem('transactions',id)} onAdd={()=>setModal('transaction')}/>} 
+      {page==='customers'&&<Customers items={db.customers} onDelete={id=>deleteItem('customers',id)}/>} 
+      {page==='products'&&<Products items={db.products} onDelete={id=>deleteItem('products',id)}/>} 
+      {page==='invoices'&&<Invoices items={db.invoices} onDelete={id=>deleteItem('invoices',id)}/>} 
+      {page==='reports'&&<Reports income={income} expenses={expenses} profit={profit} transactions={transactions}/>} 
+      {page==='notifications'&&<Notifications items={db.notifications} onClear={()=>update({notifications:[]})}/>} 
+      {page==='settings'&&<Settings user={user} db={db} setDb={setDb} theme={theme} setTheme={setTheme} notify={notify}/>} 
+      </div>
+      {toast&&<div className="toast">✓ {toast}</div>}
     </main>
-  );
+    {modal==='transaction'&&<Modal title="Record transaction" onClose={()=>setModal(null)}><TransactionForm onSubmit={addTransaction}/></Modal>}
+    {modal==='customer'&&<Modal title="Add customer" onClose={()=>setModal(null)}><CustomerForm onSubmit={addCustomer}/></Modal>}
+    {modal==='product'&&<Modal title="Add product or service" onClose={()=>setModal(null)}><ProductForm onSubmit={addProduct}/></Modal>}
+    {modal==='invoice'&&<Modal title="Create invoice" onClose={()=>setModal(null)}><InvoiceForm onSubmit={addInvoice}/></Modal>}
+  </div>;
 }
+
+function Overview({ income, expenses, profit, transactions, recent, setPage, setModal }) {
+  const has = transactions.length > 0;
+  return <><div className="metrics"><Metric label="Recorded income" value={money(income)} note={has?'From recorded transactions':'No income recorded yet'} icon="↗"/><Metric label="Recorded expenses" value={money(expenses)} note={has?'From recorded transactions':'No expenses recorded yet'} icon="↘"/><Metric label="Net position" value={money(profit)} note={has?'Income minus expenses':'Starts at zero'} icon="◈"/><Metric label="Transactions" value={transactions.length} note="Recorded activity" icon="≋"/></div><div className="grid-two"><section className="panel glass"><div className="panel-head"><div><h2>Performance</h2><p>Based only on data in this workspace.</p></div><button className="ghost-btn" onClick={()=>setPage('reports')}>Open reports →</button></div><div className="chart-area">{has ? <MiniChart transactions={transactions}/> : <div className="chart-empty"><div className="chart-line"/><strong>Your performance will appear here</strong><span>Record income and expenses to create your first trend.</span><button className="primary-btn compact" onClick={()=>setModal('transaction')}>Record first transaction</button></div>}</div></section><section className="panel glass"><div className="panel-head"><div><h2>Business health</h2><p>Simple indicators from your records.</p></div></div><div className="health"><Health label="Income recorded" value={income>0?'Active':'Waiting'} good={income>0}/><Health label="Expense tracking" value={expenses>0?'Active':'Waiting'} good={expenses>0}/><Health label="Profit signal" value={transactions.length?money(profit):'Waiting'} good={profit>=0&&transactions.length>0}/><div className="insight"><span>✦</span><div><strong>Vero insight</strong><p>{transactions.length===0?'Start by recording your first income or expense. Vero can only analyze information you actually provide.':profit>0?'Your recorded income currently exceeds your recorded expenses. Keep adding complete records for a stronger picture.':'Your current recorded expenses are higher than recorded income. Review the underlying transactions before making a decision.'}</p></div></div></div></section></div><section className="panel glass"><div className="panel-head"><div><h2>Recent activity</h2><p>Your latest recorded transactions.</p></div><button className="ghost-btn" onClick={()=>setPage('transactions')}>View all →</button></div>{recent.length?<TransactionTable items={recent}/>:<div className="inline-empty"><span>◎</span><div><strong>No activity yet</strong><p>Your transaction history will appear here.</p></div></div>}</section></>;
+}
+function Metric({label,value,note,icon}){return <div className="metric glass"><div className="metric-icon">{icon}</div><span>{label}</span><strong>{value}</strong><small>{note}</small></div>}
+function Health({label,value,good}){return <div className="health-row"><span><i className={good?'on':''}/>{label}</span><strong>{value}</strong></div>}
+function MiniChart({transactions}){const vals=transactions.slice(-8).map(x=>Number(x.type==='expense'?-x.amount:x.amount)); const max=Math.max(...vals.map(v=>Math.abs(v)),1); return <div className="bars">{vals.map((v,i)=><div className="bar-col" key={i}><div className="bar" style={{height:`${Math.max(8,Math.abs(v)/max*100)}%`}} title={money(v)}/><small>{i+1}</small></div>)}</div>}
+function TransactionTable({items,onDelete}){return <div className="table-wrap"><table><thead><tr><th>Date</th><th>Description</th><th>Type</th><th>Amount</th>{onDelete&&<th/>}</tr></thead><tbody>{items.map(x=><tr key={x.id}><td>{new Date(x.createdAt).toLocaleDateString('en-KE')}</td><td><strong>{x.description}</strong><small>{x.category||'Uncategorized'}</small></td><td><span className={`badge ${x.type}`}>{x.type}</span></td><td className={x.type==='expense'?'expense-text':'income-text'}>{x.type==='expense'?'-':'+'}{money(x.amount)}</td>{onDelete&&<td><button className="delete-btn" onClick={()=>onDelete(x.id)}>Delete</button></td>}</tr>)}</tbody></table></div>}
+function Transactions({items,onDelete}){return <section className="panel glass">{items.length?<TransactionTable items={[...items].sort((a,b)=>b.createdAt-a.createdAt)} onDelete={onDelete}/>:<Empty icon="↕" title="No transactions yet" text="Record real income and expenses to start building your business picture."/>}</section>}
+function Customers({items,onDelete}){return <section className="panel glass">{items.length?<div className="card-grid">{items.map(x=><article className="record-card" key={x.id}><div className="record-avatar">{x.name?.charAt(0).toUpperCase()}</div><div><h3>{x.name}</h3><p>{x.email||x.phone||'No contact details'}</p><small>Added {new Date(x.createdAt).toLocaleDateString('en-KE')}</small></div><button className="delete-btn" onClick={()=>onDelete(x.id)}>Delete</button></article>)}</div>:<Empty icon="◌" title="No customers yet" text="Keep customer records here when you start serving clients."/>}</section>}
+function Products({items,onDelete}){return <section className="panel glass">{items.length?<div className="card-grid">{items.map(x=><article className="record-card" key={x.id}><div className="product-icon">▦</div><div><h3>{x.name}</h3><p>{x.description||'Product or service'}</p><strong>{money(x.price)}</strong></div><button className="delete-btn" onClick={()=>onDelete(x.id)}>Delete</button></article>)}</div>:<Empty icon="▦" title="No products or services" text="Add what your business sells so invoices and records can reference it."/>}</section>}
+function Invoices({items,onDelete}){return <section className="panel glass">{items.length?<div className="invoice-list">{items.map(x=><article className="invoice-row" key={x.id}><div><span className="invoice-number">{x.number}</span><h3>{x.customer}</h3><small>{new Date(x.createdAt).toLocaleDateString('en-KE')}</small></div><strong>{money(x.amount)}</strong><span className="badge draft">{x.status}</span><button className="delete-btn" onClick={()=>onDelete(x.id)}>Delete</button></article>)}</div>:<Empty icon="▤" title="No invoices yet" text="Create your first invoice from the records you actually have."/>}</section>}
+function Reports({income,expenses,profit,transactions}){return <div className="report-grid"><Metric label="Income" value={money(income)} note="Recorded" icon="↗"/><Metric label="Expenses" value={money(expenses)} note="Recorded" icon="↘"/><Metric label="Net" value={money(profit)} note="Income − expenses" icon="◈"/><section className="panel glass report-wide"><div className="panel-head"><div><h2>Financial summary</h2><p>Generated from your current workspace records.</p></div><button className="ghost-btn" onClick={()=>window.print()}>Print / save PDF</button></div><div className="report-lines"><div><span>Total recorded income</span><strong>{money(income)}</strong></div><div><span>Total recorded expenses</span><strong>{money(expenses)}</strong></div><div className="total"><span>Net position</span><strong>{money(profit)}</strong></div><div><span>Records analyzed</span><strong>{transactions.length}</strong></div></div></section></div>}
+function Notifications({items,onClear}){return <section className="panel glass">{items.length?<><div className="panel-head"><div><h2>Notifications</h2><p>System activity and alerts.</p></div><button className="ghost-btn" onClick={onClear}>Clear all</button></div><div className="notification-list">{items.map(x=><div key={x.id}><span>✦</span><div><strong>{x.title}</strong><p>{x.message}</p><small>{new Date(x.createdAt).toLocaleString('en-KE')}</small></div></div>)}</div></>:<Empty icon="◉" title="You're all caught up" text="New workspace notifications will appear here."/>}</section>}
+function Settings({user,db,setDb,theme,setTheme,notify}){const [name,setName]=useState(user.name); const save=()=>{const a=JSON.parse(localStorage.getItem(STORAGE.auth)||'{}');localStorage.setItem(STORAGE.auth,JSON.stringify({...a,name:name.trim()}));notify('Profile updated. Reload to refresh the workspace header.');}; return <div className="settings-grid"><section className="panel glass"><div className="panel-head"><div><h2>Profile</h2><p>Your local account details.</p></div></div><label>Name<input value={name} onChange={e=>setName(e.target.value)}/></label><label>Email<input value={user.email} disabled/></label><button className="primary-btn compact" onClick={save}>Save profile</button></section><section className="panel glass"><div className="panel-head"><div><h2>Appearance</h2><p>Choose how Vero looks on this device.</p></div></div><div className="theme-options"><button className={theme==='dark'?'selected':''} onClick={()=>setTheme('dark')}>☾ Dark</button><button className={theme==='light'?'selected':''} onClick={()=>setTheme('light')}>☼ Light</button></div></section><section className="panel glass danger-panel"><div><h2>Workspace data</h2><p>Remove all records stored locally on this device. This cannot be undone.</p></div><button className="danger-btn" onClick={()=>{if(confirm('Delete all local Vero workspace records?')){setDb(emptyDb); notify('Workspace records cleared.')}}}>Clear workspace data</button></section></div>}
+
+function TransactionForm({onSubmit}){const [f,setF]=useState({type:'income',description:'',category:'',amount:''}); return <form className="modal-form" onSubmit={e=>{e.preventDefault();if(!f.description||Number(f.amount)<=0)return;onSubmit(f)}}><div className="segmented"><button type="button" className={f.type==='income'?'selected':''} onClick={()=>setF({...f,type:'income'})}>Income</button><button type="button" className={f.type==='expense'?'selected':''} onClick={()=>setF({...f,type:'expense'})}>Expense</button></div><label>Description<input required value={f.description} onChange={e=>setF({...f,description:e.target.value})} placeholder="e.g. Customer payment"/></label><label>Category<input value={f.category} onChange={e=>setF({...f,category:e.target.value})} placeholder="e.g. Sales, rent, stock"/></label><label>Amount (KES)<input required type="number" min="1" step="1" value={f.amount} onChange={e=>setF({...f,amount:e.target.value})} placeholder="0"/></label><button className="primary-btn" type="submit">Save transaction</button></form>}
+function CustomerForm({onSubmit}){const [f,setF]=useState({name:'',email:'',phone:''}); return <form className="modal-form" onSubmit={e=>{e.preventDefault();if(f.name.trim())onSubmit(f)}}><label>Name<input required value={f.name} onChange={e=>setF({...f,name:e.target.value})} placeholder="Customer name"/></label><label>Email<input type="email" value={f.email} onChange={e=>setF({...f,email:e.target.value})} placeholder="customer@example.com"/></label><label>Phone<input value={f.phone} onChange={e=>setF({...f,phone:e.target.value})} placeholder="07xx xxx xxx"/></label><button className="primary-btn" type="submit">Add customer</button></form>}
+function ProductForm({onSubmit}){const [f,setF]=useState({name:'',description:'',price:''}); return <form className="modal-form" onSubmit={e=>{e.preventDefault();if(f.name.trim()&&Number(f.price)>=0)onSubmit(f)}}><label>Name<input required value={f.name} onChange={e=>setF({...f,name:e.target.value})} placeholder="Product or service"/></label><label>Description<input value={f.description} onChange={e=>setF({...f,description:e.target.value})} placeholder="Short description"/></label><label>Price (KES)<input required type="number" min="0" value={f.price} onChange={e=>setF({...f,price:e.target.value})} placeholder="0"/></label><button className="primary-btn" type="submit">Add product</button></form>}
+function InvoiceForm({onSubmit}){const [f,setF]=useState({number:`INV-${new Date().getFullYear()}-${String(Date.now()).slice(-5)}`,customer:'',description:'',amount:''}); return <form className="modal-form" onSubmit={e=>{e.preventDefault();if(f.customer.trim()&&Number(f.amount)>0)onSubmit(f)}}><label>Invoice number<input value={f.number} onChange={e=>setF({...f,number:e.target.value})}/></label><label>Customer / person<input required value={f.customer} onChange={e=>setF({...f,customer:e.target.value})} placeholder="Client name"/></label><label>Description<input value={f.description} onChange={e=>setF({...f,description:e.target.value})} placeholder="What is being billed?"/></label><label>Total (KES)<input required type="number" min="1" value={f.amount} onChange={e=>setF({...f,amount:e.target.value})} placeholder="0"/></label><button className="primary-btn" type="submit">Save invoice</button></form>}
+
+export default function App(){const [loading,setLoading]=useState(true);const [auth,setAuth]=useState(()=>{try{return JSON.parse(localStorage.getItem(STORAGE.auth)||'null')}catch{return null}});const [db,setDb]=useState(loadDb);const [page,setPage]=useState('overview');useEffect(()=>localStorage.setItem(STORAGE.db,JSON.stringify(db)),[db]);const finish=()=>setLoading(false);if(loading)return <div className="app"><Loader onDone={finish}/></div>;if(!auth)return <div className="app"><Auth onLogin={setAuth}/></div>;return <Dashboard db={db} setDb={setDb} page={page} setPage={setPage} user={auth}/>;}
