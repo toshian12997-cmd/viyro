@@ -1,10 +1,5 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import VeroApp from './VeroApp.jsx';
-import './vero.css';
-
-createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <VeroApp />
-  </React.StrictMode>
-);
+import App from './App.jsx';
+import './app.css';
+createRoot(document.getElementById('root')).render(<React.StrictMode><App /></React.StrictMode>);
